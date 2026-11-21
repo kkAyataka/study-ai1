@@ -25,6 +25,7 @@ npm install
 npm run dev        # 開発サーバー（http://localhost:5173/study-ai1/）
 npm test           # テストを1回実行
 npm run test:watch # テストを監視モードで実行
+npm run coverage   # カバレッジを計測（結果は端末と coverage/index.html）
 npm run lint
 npm run build      # dist/ に出力
 ```
