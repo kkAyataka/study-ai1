@@ -3,8 +3,8 @@ import { loadTodos, saveTodos } from './storage'
 import type { Todo } from './todo'
 
 const sample: Todo[] = [
-  { id: 'a', title: '牛乳を買う', completed: false, createdAt: '2026-11-21T10:00:00.000Z' },
-  { id: 'b', title: '請求書を払う', completed: true, createdAt: '2026-11-20T09:00:00.000Z' },
+  { id: 'a', title: '牛乳を買う', completed: false, createdAt: '2026-11-21T10:00:00.000Z', dueDate: '2026-11-25' },
+  { id: 'b', title: '請求書を払う', completed: true, createdAt: '2026-11-20T09:00:00.000Z', dueDate: null },
 ]
 
 describe('storage', () => {
@@ -15,6 +15,12 @@ describe('storage', () => {
   it('保存したタスクをそのまま読み戻せる', () => {
     saveTodos(sample)
     expect(loadTodos()).toEqual(sample)
+  })
+
+  it('バージョン1の保存データは期限日なしのタスクとして読める', () => {
+    const v1 = sample.map(({ dueDate: _dueDate, ...rest }) => rest)
+    localStorage.setItem('study-ai1.todos', JSON.stringify({ version: 1, todos: v1 }))
+    expect(loadTodos()).toEqual(sample.map((t) => ({ ...t, dueDate: null })))
   })
 
   it('保存データが壊れていたら空の一覧を返す', () => {

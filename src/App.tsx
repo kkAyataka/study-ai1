@@ -1,11 +1,12 @@
 import { useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 import { backupFileName, createBackup, readBackup } from './backup'
 import { loadTodos, saveTodos } from './storage'
-import type { Todo } from './todo'
+import { isOverdue, toDateString, type Todo } from './todo'
 
 function App() {
   const [todos, setTodos] = useState<Todo[]>(loadTodos)
   const [draft, setDraft] = useState('')
+  const [draftDueDate, setDraftDueDate] = useState('')
   const [importError, setImportError] = useState<string | null>(null)
   const fileInput = useRef<HTMLInputElement>(null)
 
@@ -23,13 +24,20 @@ function App() {
       title,
       completed: false,
       createdAt: new Date().toISOString(),
+      dueDate: draftDueDate === '' ? null : draftDueDate,
     }
     update([todo, ...todos])
     setDraft('')
+    setDraftDueDate('')
   }
 
   function toggle(id: string) {
     update(todos.map((t) => (t.id === id ? { ...t, completed: !t.completed } : t)))
+  }
+
+  function changeDueDate(id: string, value: string) {
+    const dueDate = value === '' ? null : value
+    update(todos.map((t) => (t.id === id ? { ...t, dueDate } : t)))
   }
 
   function remove(todo: Todo) {
@@ -61,11 +69,21 @@ function App() {
     update([...result.todos].sort((a, b) => b.createdAt.localeCompare(a.createdAt)))
   }
 
+  // 描き直すたびに今日の日付と比べて期限切れを決める（日付をまたいでも次の操作で反映される）
+  // oxlint-disable-next-line react/purity
+  const today = toDateString(new Date())
+
   return (
     <main className="app">
       <h1>ToDo</h1>
       <form className="add-form" onSubmit={handleSubmit}>
         <input aria-label="新しいタスク" value={draft} onChange={(e) => setDraft(e.target.value)} />
+        <input
+          type="date"
+          aria-label="新しいタスクの期限日"
+          value={draftDueDate}
+          onChange={(e) => setDraftDueDate(e.target.value)}
+        />
         <button type="submit">追加</button>
       </form>
       {todos.length === 0 ? (
@@ -76,10 +94,24 @@ function App() {
             <li key={todo.id}>
               <label>
                 <input type="checkbox" checked={todo.completed} onChange={() => toggle(todo.id)} />
-                <span style={todo.completed ? { textDecoration: 'line-through' } : undefined}>
+                <span
+                  style={
+                    todo.completed
+                      ? { textDecoration: 'line-through' }
+                      : isOverdue(todo, today)
+                        ? { color: 'rgb(198, 40, 40)' }
+                        : undefined
+                  }
+                >
                   {todo.title}
                 </span>
               </label>
+              <input
+                type="date"
+                aria-label={`「${todo.title}」の期限日`}
+                value={todo.dueDate ?? ''}
+                onChange={(e) => changeDueDate(todo.id, e.target.value)}
+              />
               <button type="button" aria-label={`「${todo.title}」を削除`} onClick={() => remove(todo)}>
                 削除
               </button>

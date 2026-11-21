@@ -1,4 +1,4 @@
-import type { Todo } from './todo'
+import { toDateString, type Todo } from './todo'
 import { parseTodos, serializeTodos, type ParseResult } from './todoData'
 
 export function createBackup(todos: Todo[]): string {
@@ -10,6 +10,5 @@ export function readBackup(text: string): ParseResult {
 }
 
 export function backupFileName(date: Date): string {
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `todos-${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}.json`
+  return `todos-${toDateString(date)}.json`
 }
