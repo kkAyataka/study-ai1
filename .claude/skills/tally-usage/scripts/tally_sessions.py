@@ -6,7 +6,7 @@
 - CSV にすでにあるセッション（session_id が同じ行）は、最新の値で上書きする。
 - ログが消えたセッションの行はそのまま残す。
 """
-import csv, glob, json, os, sys
+import csv, glob, io, json, os, sys
 from collections import defaultdict
 from datetime import datetime
 
@@ -97,7 +97,7 @@ def main():
         sys.exit("usage: tally_sessions.py CSV_PATH")
     path = os.path.expanduser(sys.argv[1])
     existing = []
-    if os.path.exists(path):
+    if os.path.exists(path) and os.path.getsize(path) > 0:  # 空のファイルは新しいファイルと同じに扱う
         with open(path, newline="", encoding="utf-8-sig") as f:
             reader = csv.DictReader(f)
             if reader.fieldnames != COLUMNS:
@@ -122,13 +122,15 @@ def main():
     added = sorted((r for sid, r in fresh.items() if sid not in done), key=lambda r: r["start"])
     out.extend(added)
 
+    # 先に全体を組み立ててから直接書き込む。OneDrive などのフォルダでは
+    # 一時ファイルからの置き換え（os.replace）が許可されないことがある。
+    buf = io.StringIO()
+    w = csv.DictWriter(buf, fieldnames=COLUMNS)
+    w.writeheader()
+    w.writerows(out)
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
-    tmp = path + ".tmp"
-    with open(tmp, "w", newline="", encoding="utf-8-sig") as f:  # BOM 付きで Excel でも文字化けしない
-        w = csv.DictWriter(f, fieldnames=COLUMNS)
-        w.writeheader()
-        w.writerows(out)
-    os.replace(tmp, path)
+    with open(path, "w", newline="", encoding="utf-8-sig") as f:  # BOM 付きで Excel でも文字化けしない
+        f.write(buf.getvalue())
 
     print(f"file: {path}")
     print(f"added: {len(added)}  updated: {len(updated)}  "
