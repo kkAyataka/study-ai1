@@ -17,6 +17,7 @@ function App() {
   const [draft, setDraft] = useState('')
   const [draftDueDate, setDraftDueDate] = useState('')
   const [sortOrder, setSortOrder] = useState<SortOrder>(SORT_ORDERS[0])
+  const [incompleteOnly, setIncompleteOnly] = useState(false)
   const [importError, setImportError] = useState<string | null>(null)
   const fileInput = useRef<HTMLInputElement>(null)
 
@@ -88,6 +89,7 @@ function App() {
   // 描き直すたびに今日の日付と比べて期限切れを決める（日付をまたいでも次の操作で反映される）
   // oxlint-disable-next-line react/purity
   const today = toDateString(new Date())
+  const visibleTodos = sortTodos(incompleteOnly ? todos.filter((t) => !t.completed) : todos, sortOrder)
 
   return (
     <main className="app">
@@ -113,12 +115,18 @@ function App() {
             ))}
           </select>
         </label>
+        <label>
+          <input type="checkbox" checked={incompleteOnly} onChange={(e) => setIncompleteOnly(e.target.checked)} />
+          未完了だけ表示
+        </label>
       </div>
       {todos.length === 0 ? (
         <p className="empty">タスクはありません</p>
+      ) : visibleTodos.length === 0 ? (
+        <p className="empty">未完了のタスクはありません</p>
       ) : (
         <ul className="todo-list">
-          {sortTodos(todos, sortOrder).map((todo) => (
+          {visibleTodos.map((todo) => (
             <li key={todo.id}>
               <label>
                 <input type="checkbox" checked={todo.completed} onChange={() => toggle(todo.id)} />

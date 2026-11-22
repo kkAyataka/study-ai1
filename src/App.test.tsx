@@ -26,6 +26,31 @@ function expectListOrder(expected: string[]) {
   })
 }
 
+/**
+ * 書き出しボタンを押し、書き出したファイルに入っているタスクのタイトルを順に返す。
+ * テスト環境ではダウンロードできないので、ファイルの中身だけを受け取り、差し替えたものは押したあとで元に戻す
+ */
+async function exportTitles(user: ReturnType<typeof userEvent.setup>): Promise<string[]> {
+  let exported: Blob | undefined
+  const { createObjectURL, revokeObjectURL } = URL
+  URL.createObjectURL = (file: Blob | MediaSource) => {
+    exported = file as Blob
+    return 'blob:backup'
+  }
+  URL.revokeObjectURL = () => {}
+  const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+  try {
+    await user.click(screen.getByRole('button', { name: '書き出し' }))
+  } finally {
+    URL.createObjectURL = createObjectURL
+    URL.revokeObjectURL = revokeObjectURL
+    click.mockRestore()
+  }
+  if (!exported) throw new Error('書き出されていない')
+  const backup: { todos: { title: string }[] } = JSON.parse(await exported.text())
+  return backup.todos.map((todo) => todo.title)
+}
+
 const OVERDUE_COLOR = 'rgb(198, 40, 40)'
 
 describe('App', () => {
@@ -269,22 +294,13 @@ describe('App', () => {
     })
 
     it('期限日順にしていても、書き出しにはすべてのタスクが作成順で入る', async () => {
-      const blobs: Blob[] = []
-      URL.createObjectURL = vi.fn((blob: Blob) => {
-        blobs.push(blob)
-        return 'blob:backup'
-      })
-      URL.revokeObjectURL = vi.fn()
-      vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
       const user = userEvent.setup()
       render(<App />)
       await addTodoWithDueDate(user, '20日まで', '2026-11-20')
       await addTodoWithDueDate(user, '25日まで', '2026-11-25')
       await user.selectOptions(screen.getByRole('combobox', { name: '並び順' }), '期限日順')
 
-      await user.click(screen.getByRole('button', { name: '書き出し' }))
-      const backup = JSON.parse(await blobs[0].text())
-      expect(backup.todos.map((todo: { title: string }) => todo.title)).toEqual(['25日まで', '20日まで'])
+      expect(await exportTitles(user)).toEqual(['25日まで', '20日まで'])
     })
 
     it('期限日順にしていても、開き直すと作成順に戻り、タスクも作成順のまま残っている', async () => {
@@ -299,6 +315,108 @@ describe('App', () => {
       render(<App />)
       expect(screen.getByRole('combobox', { name: '並び順' })).toHaveDisplayValue('作成順')
       expectListOrder(['25日まで', '20日まで'])
+    })
+  })
+
+  describe('未完了だけ表示', () => {
+    it('初めはオフで、オンにすると完了したタスクが隠れ、オフにすると戻る', async () => {
+      const user = userEvent.setup()
+      render(<App />)
+      await addTodo(user, '牛乳を買う')
+      await addTodo(user, '請求書を払う')
+      await user.click(screen.getByRole('checkbox', { name: '牛乳を買う' }))
+
+      const incompleteOnly = screen.getByRole('checkbox', { name: '未完了だけ表示' })
+      expect(incompleteOnly).not.toBeChecked()
+      expectListOrder(['請求書を払う', '牛乳を買う'])
+
+      await user.click(incompleteOnly)
+      expectListOrder(['請求書を払う'])
+
+      await user.click(incompleteOnly)
+      expectListOrder(['請求書を払う', '牛乳を買う'])
+    })
+
+    it('絞り込み中に完了にしたタスクはすぐに消え、追加・期限日の変更・削除は今までどおりでき、開き直しても残る', async () => {
+      const user = userEvent.setup()
+      vi.spyOn(window, 'confirm').mockReturnValue(true)
+      const { unmount } = render(<App />)
+      await addTodo(user, '牛乳を買う')
+      await addTodo(user, '請求書を払う')
+      await user.click(screen.getByRole('checkbox', { name: '未完了だけ表示' }))
+
+      await user.click(screen.getByRole('checkbox', { name: '牛乳を買う' }))
+      expectListOrder(['請求書を払う'])
+
+      await addTodo(user, '本を返す')
+      expectListOrder(['本を返す', '請求書を払う'])
+
+      setDate(screen.getByLabelText('「本を返す」の期限日'), '2026-11-25')
+      expect(screen.getByLabelText('「本を返す」の期限日')).toHaveValue('2026-11-25')
+
+      await user.click(screen.getByRole('button', { name: '「請求書を払う」を削除' }))
+      expectListOrder(['本を返す'])
+
+      await user.click(screen.getByRole('checkbox', { name: '未完了だけ表示' }))
+      expectListOrder(['本を返す', '牛乳を買う'])
+      expect(screen.getByRole('checkbox', { name: '牛乳を買う' })).toBeChecked()
+      unmount()
+
+      render(<App />)
+      expectListOrder(['本を返す', '牛乳を買う'])
+      expect(screen.getByRole('checkbox', { name: '牛乳を買う' })).toBeChecked()
+      expect(screen.getByLabelText('「本を返す」の期限日')).toHaveValue('2026-11-25')
+    })
+
+    it('未完了のタスクがなければ「未完了のタスクはありません」、タスクが1件もなければ「タスクはありません」と表示する', async () => {
+      const user = userEvent.setup()
+      vi.spyOn(window, 'confirm').mockReturnValue(true)
+      render(<App />)
+      await user.click(screen.getByRole('checkbox', { name: '未完了だけ表示' }))
+      expect(screen.getByText('タスクはありません')).toBeInTheDocument()
+
+      await addTodo(user, '牛乳を買う')
+      await user.click(screen.getByRole('checkbox', { name: '牛乳を買う' }))
+      expect(screen.queryByRole('listitem')).not.toBeInTheDocument()
+      expect(screen.getByText('未完了のタスクはありません')).toBeInTheDocument()
+      expect(screen.queryByText('タスクはありません')).not.toBeInTheDocument()
+
+      await user.click(screen.getByRole('checkbox', { name: '未完了だけ表示' }))
+      expect(screen.queryByText('未完了のタスクはありません')).not.toBeInTheDocument()
+      await user.click(screen.getByRole('button', { name: '「牛乳を買う」を削除' }))
+      await user.click(screen.getByRole('checkbox', { name: '未完了だけ表示' }))
+      expect(screen.getByText('タスクはありません')).toBeInTheDocument()
+      expect(screen.queryByText('未完了のタスクはありません')).not.toBeInTheDocument()
+    })
+
+    it('期限日順と組み合わせると、未完了のタスクだけが期限日の順に並ぶ', async () => {
+      const user = userEvent.setup()
+      render(<App />)
+      await addTodoWithDueDate(user, '25日まで', '2026-11-25')
+      await addTodo(user, '期限日なし')
+      await addTodoWithDueDate(user, '20日まで・完了', '2026-11-20')
+      await addTodoWithDueDate(user, '22日まで', '2026-11-22')
+      await user.click(screen.getByRole('checkbox', { name: '20日まで・完了' }))
+
+      await user.selectOptions(screen.getByRole('combobox', { name: '並び順' }), '期限日順')
+      await user.click(screen.getByRole('checkbox', { name: '未完了だけ表示' }))
+      expectListOrder(['22日まで', '25日まで', '期限日なし'])
+    })
+
+    it('絞り込んでいても、開き直すとすべて表示に戻り、書き出しにはすべてのタスクが入る', async () => {
+      const user = userEvent.setup()
+      const { unmount } = render(<App />)
+      await addTodo(user, '牛乳を買う')
+      await addTodo(user, '請求書を払う')
+      await user.click(screen.getByRole('checkbox', { name: '牛乳を買う' }))
+      await user.click(screen.getByRole('checkbox', { name: '未完了だけ表示' }))
+
+      expect(await exportTitles(user)).toEqual(['請求書を払う', '牛乳を買う'])
+      unmount()
+
+      render(<App />)
+      expect(screen.getByRole('checkbox', { name: '未完了だけ表示' })).not.toBeChecked()
+      expectListOrder(['請求書を払う', '牛乳を買う'])
     })
   })
 })
