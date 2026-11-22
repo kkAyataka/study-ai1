@@ -28,6 +28,11 @@ describe('storage', () => {
     expect(loadTodos()).toEqual([])
   })
 
+  it('正しくない期限日を含む保存データなら空の一覧を返す', () => {
+    localStorage.setItem('study-ai1.todos', JSON.stringify({ version: 2, todos: [{ ...sample[0], dueDate: '2026-02-30' }] }))
+    expect(loadTodos()).toEqual([])
+  })
+
   it('未対応のバージョンのデータなら空の一覧を返す', () => {
     localStorage.setItem('study-ai1.todos', JSON.stringify({ version: 99, todos: sample }))
     expect(loadTodos()).toEqual([])

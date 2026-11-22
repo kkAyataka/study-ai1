@@ -1,7 +1,7 @@
 import { useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 import { backupFileName, createBackup, readBackup } from './backup'
 import { loadTodos, saveTodos } from './storage'
-import { isOverdue, toDateString, type Todo } from './todo'
+import { isOverdue, parseDueDateInput, toDateString, type Todo } from './todo'
 
 function App() {
   const [todos, setTodos] = useState<Todo[]>(loadTodos)
@@ -24,7 +24,7 @@ function App() {
       title,
       completed: false,
       createdAt: new Date().toISOString(),
-      dueDate: draftDueDate === '' ? null : draftDueDate,
+      dueDate: parseDueDateInput(draftDueDate) ?? null,
     }
     update([todo, ...todos])
     setDraft('')
@@ -35,8 +35,14 @@ function App() {
     update(todos.map((t) => (t.id === id ? { ...t, completed: !t.completed } : t)))
   }
 
+  // 保存すると読み戻せなくなる値（5桁の年など）は受け付けない。日付欄は元の値のまま
+  function changeDraftDueDate(value: string) {
+    if (parseDueDateInput(value) !== undefined) setDraftDueDate(value)
+  }
+
   function changeDueDate(id: string, value: string) {
-    const dueDate = value === '' ? null : value
+    const dueDate = parseDueDateInput(value)
+    if (dueDate === undefined) return
     update(todos.map((t) => (t.id === id ? { ...t, dueDate } : t)))
   }
 
@@ -82,7 +88,7 @@ function App() {
           type="date"
           aria-label="新しいタスクの期限日"
           value={draftDueDate}
-          onChange={(e) => setDraftDueDate(e.target.value)}
+          onChange={(e) => changeDraftDueDate(e.target.value)}
         />
         <button type="submit">追加</button>
       </form>

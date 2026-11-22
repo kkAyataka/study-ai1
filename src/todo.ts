@@ -13,6 +13,22 @@ export function toDateString(date: Date): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
 }
 
+/** 実在する日付の YYYY-MM-DD 形式かどうか */
+export function isDateString(value: unknown): value is string {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
+  const [year, month, day] = value.split('-').map(Number)
+  // Date.UTC は 0〜99 年を 1900 年代として扱うので、年は setUTCFullYear で設定する
+  const date = new Date(0)
+  date.setUTCFullYear(year, month - 1, day)
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day
+}
+
+/** 日付入力欄の値を期限日にする。空なら期限日なし（null）、保存できない値なら undefined */
+export function parseDueDateInput(value: string): string | null | undefined {
+  if (value === '') return null
+  return isDateString(value) ? value : undefined
+}
+
 /** 期限日の翌日になっても未完了なら期限切れ */
 export function isOverdue(todo: Todo, today: string): boolean {
   return !todo.completed && todo.dueDate !== null && todo.dueDate < today

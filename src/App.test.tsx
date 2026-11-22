@@ -122,6 +122,32 @@ describe('App', () => {
       expect(screen.getByLabelText('「請求書を払う」の期限日')).toHaveValue('')
     })
 
+    it('保存すると読み戻せなくなる期限日は受け付けず、開き直してもタスクが残る', async () => {
+      const user = userEvent.setup()
+      const { unmount } = render(<App />)
+      setDate(screen.getByLabelText('新しいタスクの期限日'), '275760-01-01')
+      expect(screen.getByLabelText('新しいタスクの期限日')).toHaveValue('')
+      await addTodo(user, '牛乳を買う')
+      setDate(screen.getByLabelText('「牛乳を買う」の期限日'), '2026-11-25')
+      setDate(screen.getByLabelText('「牛乳を買う」の期限日'), '275760-01-01')
+      expect(screen.getByLabelText('「牛乳を買う」の期限日')).toHaveValue('2026-11-25')
+      unmount()
+
+      render(<App />)
+      expect(screen.getByLabelText('「牛乳を買う」の期限日')).toHaveValue('2026-11-25')
+    })
+
+    it('0001〜0099年の期限日も指定でき、開き直しても残る', async () => {
+      const user = userEvent.setup()
+      const { unmount } = render(<App />)
+      await addTodo(user, '牛乳を買う')
+      setDate(screen.getByLabelText('「牛乳を買う」の期限日'), '0050-01-01')
+      unmount()
+
+      render(<App />)
+      expect(screen.getByLabelText('「牛乳を買う」の期限日')).toHaveValue('0050-01-01')
+    })
+
     it('期限日の翌日以降も未完了なら期限切れとして赤字になり、当日・完了済み・期限日なしはならない', async () => {
       vi.useFakeTimers({ toFake: ['Date'] })
       vi.setSystemTime(new Date(2026, 10, 21, 23, 59))

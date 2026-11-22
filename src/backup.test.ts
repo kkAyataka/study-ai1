@@ -25,6 +25,11 @@ describe('backup', () => {
     })
   })
 
+  it('0001〜0099年の期限日も読み込める', () => {
+    const todos = [{ ...sample[0], dueDate: '0050-01-01' }]
+    expect(readBackup(JSON.stringify({ version: 2, todos }))).toEqual({ ok: true, todos })
+  })
+
   it('ファイル名は書き出した日の日付になる', () => {
     expect(backupFileName(new Date(2026, 0, 5, 23, 59))).toBe('todos-2026-01-05.json')
   })
@@ -48,6 +53,7 @@ describe('backup', () => {
     ['dueDate が存在しない日付である', { version: 2, todos: [{ ...sample[0], dueDate: '2026-13-45' }] }],
     ['dueDate が2月30日である', { version: 2, todos: [{ ...sample[0], dueDate: '2026-02-30' }] }],
     ['dueDate に時刻が付いている', { version: 2, todos: [{ ...sample[0], dueDate: '2026-11-25T00:00:00Z' }] }],
+    ['dueDate の年が5桁である', { version: 2, todos: [{ ...sample[0], dueDate: '20261-11-25' }] }],
     ['dueDate が数値である', { version: 2, todos: [{ ...sample[0], dueDate: 20261125 }] }],
     ['バージョン1のタスクの型が正しくない', { version: 1, todos: [{ ...v1Todo, completed: 'yes' }] }],
   ])('%s場合はエラーになる', (_label, data) => {
