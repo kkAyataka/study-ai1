@@ -33,3 +33,25 @@ export function parseDueDateInput(value: string): string | null | undefined {
 export function isOverdue(todo: Todo, today: string): boolean {
   return !todo.completed && todo.dueDate !== null && todo.dueDate < today
 }
+
+/** 選べる並び順。先頭が初めに選ばれている並び順 */
+export const SORT_ORDERS = ['作成順', '期限日順'] as const
+
+export type SortOrder = (typeof SORT_ORDERS)[number]
+
+/** プルダウンの値を並び順にする。並び順でない値なら undefined */
+export function parseSortOrder(value: string): SortOrder | undefined {
+  return SORT_ORDERS.find((order) => order === value)
+}
+
+/** 一覧に表示する順に並べたタスクを返す。もとの配列（作成順）は変えない */
+export function sortTodos(todos: Todo[], order: SortOrder): Todo[] {
+  if (order === '作成順') return todos
+  // 期限日のないタスクは最後に回す。sort は安定なので、期限日が同じもの同士は作成順のまま
+  return [...todos].sort((a, b) => {
+    if (a.dueDate === b.dueDate) return 0
+    if (a.dueDate === null) return 1
+    if (b.dueDate === null) return -1
+    return a.dueDate < b.dueDate ? -1 : 1
+  })
+}

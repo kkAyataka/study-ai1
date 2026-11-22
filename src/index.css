@@ -32,10 +32,23 @@ button {
   cursor: pointer;
 }
 
+.view-options {
+  display: flex;
+  gap: 16px;
+  margin-top: 16px;
+  font-size: 0.9rem;
+}
+
+.view-options label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .todo-list {
   list-style: none;
   padding: 0;
-  margin: 24px 0;
+  margin: 16px 0 24px;
 }
 
 .todo-list li {

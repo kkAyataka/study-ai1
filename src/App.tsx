@@ -1,12 +1,22 @@
 import { useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 import { backupFileName, createBackup, readBackup } from './backup'
 import { loadTodos, saveTodos } from './storage'
-import { isOverdue, parseDueDateInput, toDateString, type Todo } from './todo'
+import {
+  isOverdue,
+  parseDueDateInput,
+  parseSortOrder,
+  SORT_ORDERS,
+  sortTodos,
+  toDateString,
+  type SortOrder,
+  type Todo,
+} from './todo'
 
 function App() {
   const [todos, setTodos] = useState<Todo[]>(loadTodos)
   const [draft, setDraft] = useState('')
   const [draftDueDate, setDraftDueDate] = useState('')
+  const [sortOrder, setSortOrder] = useState<SortOrder>(SORT_ORDERS[0])
   const [importError, setImportError] = useState<string | null>(null)
   const fileInput = useRef<HTMLInputElement>(null)
 
@@ -92,11 +102,23 @@ function App() {
         />
         <button type="submit">追加</button>
       </form>
+      <div className="view-options">
+        <label>
+          並び順
+          <select value={sortOrder} onChange={(e) => setSortOrder(parseSortOrder(e.target.value) ?? sortOrder)}>
+            {SORT_ORDERS.map((order) => (
+              <option key={order} value={order}>
+                {order}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
       {todos.length === 0 ? (
         <p className="empty">タスクはありません</p>
       ) : (
         <ul className="todo-list">
-          {todos.map((todo) => (
+          {sortTodos(todos, sortOrder).map((todo) => (
             <li key={todo.id}>
               <label>
                 <input type="checkbox" checked={todo.completed} onChange={() => toggle(todo.id)} />

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import App from './App'
@@ -10,6 +10,20 @@ async function addTodo(user: ReturnType<typeof userEvent.setup>, title: string) 
 
 function setDate(input: HTMLElement, value: string) {
   fireEvent.change(input, { target: { value } })
+}
+
+async function addTodoWithDueDate(user: ReturnType<typeof userEvent.setup>, title: string, dueDate: string) {
+  setDate(screen.getByLabelText('新しいタスクの期限日'), dueDate)
+  await addTodo(user, title)
+}
+
+/** 一覧の上から順に、各行のチェックボックスの名前（タスクのタイトル）が expected どおりか確かめる */
+function expectListOrder(expected: string[]) {
+  const items = screen.getAllByRole('listitem')
+  expect(items).toHaveLength(expected.length)
+  expected.forEach((title, i) => {
+    expect(within(items[i]).getByRole('checkbox', { name: title })).toBeInTheDocument()
+  })
 }
 
 const OVERDUE_COLOR = 'rgb(198, 40, 40)'
@@ -94,8 +108,7 @@ describe('App', () => {
     it('追加するときに期限日を指定でき、追加後は日付欄も空に戻る', async () => {
       const user = userEvent.setup()
       render(<App />)
-      setDate(screen.getByLabelText('新しいタスクの期限日'), '2026-11-25')
-      await addTodo(user, '牛乳を買う')
+      await addTodoWithDueDate(user, '牛乳を買う', '2026-11-25')
       expect(screen.getByLabelText('「牛乳を買う」の期限日')).toHaveValue('2026-11-25')
       expect(screen.getByLabelText('新しいタスクの期限日')).toHaveValue('')
     })
@@ -159,8 +172,7 @@ describe('App', () => {
         ['今日まで', '2026-11-21'],
         ['昨日まで・完了', '2026-11-20'],
       ]) {
-        setDate(screen.getByLabelText('新しいタスクの期限日'), dueDate)
-        await addTodo(user, title)
+        await addTodoWithDueDate(user, title, dueDate)
       }
       await user.click(screen.getByRole('checkbox', { name: '昨日まで・完了' }))
 
@@ -176,9 +188,117 @@ describe('App', () => {
       vi.setSystemTime(new Date(2026, 10, 21, 12))
       const user = userEvent.setup()
       render(<App />)
-      setDate(screen.getByLabelText('新しいタスクの期限日'), '2026-11-01')
-      await addTodo(user, '本当は先月まで')
+      await addTodoWithDueDate(user, '本当は先月まで', '2026-11-01')
       expect(screen.getByLabelText('「本当は先月まで」の期限日')).toHaveValue('2026-11-01')
+    })
+  })
+
+  describe('並び順', () => {
+    it('初めは作成順で、期限日順を選ぶと期限日の早い順に並ぶ', async () => {
+      const user = userEvent.setup()
+      render(<App />)
+      await addTodoWithDueDate(user, '25日まで', '2026-11-25')
+      await addTodoWithDueDate(user, '30日まで', '2026-11-30')
+      await addTodoWithDueDate(user, '20日まで', '2026-11-20')
+
+      const sortOrder = screen.getByRole('combobox', { name: '並び順' })
+      expect(sortOrder).toHaveDisplayValue('作成順')
+      expectListOrder(['20日まで', '30日まで', '25日まで'])
+
+      await user.selectOptions(sortOrder, '期限日順')
+      expectListOrder(['20日まで', '25日まで', '30日まで'])
+    })
+
+    it('期限日順では期限日のないタスクが一番下に来て、期限日が同じものや期限日のないもの同士は作成順に並ぶ', async () => {
+      const user = userEvent.setup()
+      render(<App />)
+      await addTodo(user, '期限日なし・古い')
+      await addTodoWithDueDate(user, '25日まで・古い', '2026-11-25')
+      await addTodoWithDueDate(user, '30日まで', '2026-11-30')
+      await addTodo(user, '期限日なし・新しい')
+      await addTodoWithDueDate(user, '25日まで・新しい', '2026-11-25')
+
+      await user.selectOptions(screen.getByRole('combobox', { name: '並び順' }), '期限日順')
+      expectListOrder([
+        '25日まで・新しい',
+        '25日まで・古い',
+        '30日まで',
+        '期限日なし・新しい',
+        '期限日なし・古い',
+      ])
+    })
+
+    it('期限日順のまま完了・期限日の変更と解除・追加をしても期限日の順に並び、作成順に戻せる', async () => {
+      const user = userEvent.setup()
+      render(<App />)
+      await addTodoWithDueDate(user, '25日まで', '2026-11-25')
+      await addTodoWithDueDate(user, '20日まで', '2026-11-20')
+      const sortOrder = screen.getByRole('combobox', { name: '並び順' })
+      await user.selectOptions(sortOrder, '期限日順')
+
+      await user.click(screen.getByRole('checkbox', { name: '20日まで' }))
+      expectListOrder(['20日まで', '25日まで'])
+      expect(screen.getByText('20日まで')).toHaveStyle({ textDecoration: 'line-through' })
+
+      setDate(screen.getByLabelText('「20日まで」の期限日'), '2026-11-30')
+      expectListOrder(['25日まで', '20日まで'])
+
+      await addTodoWithDueDate(user, '27日まで', '2026-11-27')
+      expectListOrder(['25日まで', '27日まで', '20日まで'])
+      expect(sortOrder).toHaveDisplayValue('期限日順')
+
+      setDate(screen.getByLabelText('「27日まで」の期限日'), '')
+      expectListOrder(['25日まで', '20日まで', '27日まで'])
+
+      await user.selectOptions(sortOrder, '作成順')
+      expectListOrder(['27日まで', '20日まで', '25日まで'])
+    })
+
+    it('期限日順でも期限切れのタスクは赤字になる', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] })
+      vi.setSystemTime(new Date(2026, 10, 21, 12))
+      const user = userEvent.setup()
+      render(<App />)
+      await addTodoWithDueDate(user, '昨日まで', '2026-11-20')
+      await addTodoWithDueDate(user, '明日まで', '2026-11-22')
+      await user.selectOptions(screen.getByRole('combobox', { name: '並び順' }), '期限日順')
+
+      expectListOrder(['昨日まで', '明日まで'])
+      expect(screen.getByText('昨日まで')).toHaveStyle({ color: OVERDUE_COLOR })
+      expect(screen.getByText('明日まで')).not.toHaveStyle({ color: OVERDUE_COLOR })
+    })
+
+    it('期限日順にしていても、書き出しにはすべてのタスクが作成順で入る', async () => {
+      const blobs: Blob[] = []
+      URL.createObjectURL = vi.fn((blob: Blob) => {
+        blobs.push(blob)
+        return 'blob:backup'
+      })
+      URL.revokeObjectURL = vi.fn()
+      vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+      const user = userEvent.setup()
+      render(<App />)
+      await addTodoWithDueDate(user, '20日まで', '2026-11-20')
+      await addTodoWithDueDate(user, '25日まで', '2026-11-25')
+      await user.selectOptions(screen.getByRole('combobox', { name: '並び順' }), '期限日順')
+
+      await user.click(screen.getByRole('button', { name: '書き出し' }))
+      const backup = JSON.parse(await blobs[0].text())
+      expect(backup.todos.map((todo: { title: string }) => todo.title)).toEqual(['25日まで', '20日まで'])
+    })
+
+    it('期限日順にしていても、開き直すと作成順に戻り、タスクも作成順のまま残っている', async () => {
+      const user = userEvent.setup()
+      const { unmount } = render(<App />)
+      await addTodoWithDueDate(user, '20日まで', '2026-11-20')
+      await addTodoWithDueDate(user, '25日まで', '2026-11-25')
+      await user.selectOptions(screen.getByRole('combobox', { name: '並び順' }), '期限日順')
+      await user.click(screen.getByRole('checkbox', { name: '25日まで' }))
+      unmount()
+
+      render(<App />)
+      expect(screen.getByRole('combobox', { name: '並び順' })).toHaveDisplayValue('作成順')
+      expectListOrder(['25日まで', '20日まで'])
     })
   })
 })
