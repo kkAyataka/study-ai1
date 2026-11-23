@@ -1,3 +1,8 @@
+## Project docs
+
+- `docs/spec.md`: the app's spec. Read it before changing behaviour; update it in the same change.
+- `.tasks/<date>-<name>/`: records of past tasks (requirements, implementation notes, usage).
+
 ## Agent skills
 
 ### Issue tracker
