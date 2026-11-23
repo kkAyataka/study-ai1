@@ -139,6 +139,13 @@ describe('App', () => {
     expect(screen.getByRole('checkbox', { name: '牛乳を買う' })).toBeChecked()
   })
 
+  it('開いただけでは保存しないので、読めない保存データも空の一覧で上書きされない', () => {
+    localStorage.setItem('study-ai1.todos', '{壊れた')
+    render(<App />)
+    expect(screen.getByText('タスクはありません')).toBeInTheDocument()
+    expect(localStorage.getItem('study-ai1.todos')).toBe('{壊れた')
+  })
+
   describe('期限日', () => {
     it('追加するときに期限日を指定でき、追加後は日付欄も空に戻る', async () => {
       const user = userEvent.setup()

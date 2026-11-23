@@ -1,6 +1,5 @@
 import { useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 import { backupFileName, createBackup, readBackup } from './backup'
-import { loadTodos, saveTodos } from './storage'
 import {
   isOverdue,
   parseDueDateInput,
@@ -11,9 +10,10 @@ import {
   type SortOrder,
   type Todo,
 } from './todo'
+import { useTodos } from './useTodos'
 
 function App() {
-  const [todos, setTodos] = useState<Todo[]>(loadTodos)
+  const { todos, add, toggle, setDueDate, remove, replaceAll } = useTodos()
   const [draft, setDraft] = useState('')
   const [draftDueDate, setDraftDueDate] = useState('')
   const [sortOrder, setSortOrder] = useState<SortOrder>(SORT_ORDERS[0])
@@ -21,29 +21,11 @@ function App() {
   const [importError, setImportError] = useState<string | null>(null)
   const fileInput = useRef<HTMLInputElement>(null)
 
-  function update(next: Todo[]) {
-    setTodos(next)
-    saveTodos(next)
-  }
-
   function handleSubmit(event: FormEvent) {
     event.preventDefault()
-    const title = draft.trim()
-    if (title === '') return
-    const todo: Todo = {
-      id: crypto.randomUUID(),
-      title,
-      completed: false,
-      createdAt: new Date().toISOString(),
-      dueDate: parseDueDateInput(draftDueDate) ?? null,
-    }
-    update([todo, ...todos])
+    if (!add(draft, draftDueDate)) return
     setDraft('')
     setDraftDueDate('')
-  }
-
-  function toggle(id: string) {
-    update(todos.map((t) => (t.id === id ? { ...t, completed: !t.completed } : t)))
   }
 
   // 保存すると読み戻せなくなる値（5桁の年など）は受け付けない。日付欄は元の値のまま
@@ -51,15 +33,9 @@ function App() {
     if (parseDueDateInput(value) !== undefined) setDraftDueDate(value)
   }
 
-  function changeDueDate(id: string, value: string) {
-    const dueDate = parseDueDateInput(value)
-    if (dueDate === undefined) return
-    update(todos.map((t) => (t.id === id ? { ...t, dueDate } : t)))
-  }
-
-  function remove(todo: Todo) {
+  function confirmRemove(todo: Todo) {
     if (!window.confirm(`「${todo.title}」を削除しますか？`)) return
-    update(todos.filter((t) => t.id !== todo.id))
+    remove(todo.id)
   }
 
   function handleExport() {
@@ -83,7 +59,7 @@ function App() {
     }
     setImportError(null)
     if (!window.confirm('今のタスクは全部消えて、ファイルの内容に置き換わります。読み込みますか？')) return
-    update([...result.todos].sort((a, b) => b.createdAt.localeCompare(a.createdAt)))
+    replaceAll(result.todos)
   }
 
   // 描き直すたびに今日の日付と比べて期限切れを決める（日付をまたいでも次の操作で反映される）
@@ -146,9 +122,9 @@ function App() {
                 type="date"
                 aria-label={`「${todo.title}」の期限日`}
                 value={todo.dueDate ?? ''}
-                onChange={(e) => changeDueDate(todo.id, e.target.value)}
+                onChange={(e) => setDueDate(todo.id, e.target.value)}
               />
-              <button type="button" aria-label={`「${todo.title}」を削除`} onClick={() => remove(todo)}>
+              <button type="button" aria-label={`「${todo.title}」を削除`} onClick={() => confirmRemove(todo)}>
                 削除
               </button>
             </li>
