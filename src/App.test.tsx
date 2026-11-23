@@ -51,6 +51,16 @@ async function exportTitles(user: ReturnType<typeof userEvent.setup>): Promise<s
   return backup.todos.map((todo) => todo.title)
 }
 
+/** 読み込みボタンの先にあるファイル選択欄に、data を JSON にしたファイルを渡す */
+async function importFile(user: ReturnType<typeof userEvent.setup>, data: unknown) {
+  const input = document.querySelector<HTMLInputElement>('input[type="file"]')
+  if (!input) throw new Error('ファイル選択欄がない')
+  const file = new File([JSON.stringify(data)], 'todos.json', { type: 'application/json' })
+  await user.upload(input, file)
+}
+
+const IMPORT_CONFIRM = '今のタスクは全部消えて、ファイルの内容に置き換わります。読み込みますか？'
+
 const OVERDUE_COLOR = 'rgb(198, 40, 40)'
 
 describe('App', () => {
@@ -417,6 +427,59 @@ describe('App', () => {
       render(<App />)
       expect(screen.getByRole('checkbox', { name: '未完了だけ表示' })).not.toBeChecked()
       expectListOrder(['請求書を払う', '牛乳を買う'])
+    })
+  })
+  describe('読み込み', () => {
+    const backup = {
+      version: 2,
+      todos: [
+        { id: 'a', title: '古いタスク', completed: true, createdAt: '2026-11-01T00:00:00.000Z', dueDate: null },
+        { id: 'b', title: '新しいタスク', completed: false, createdAt: '2026-11-10T00:00:00.000Z', dueDate: '2026-11-30' },
+      ],
+    }
+
+    it('確認してから今のタスクを全部置き換え、作成日時の新しい順に並べ、開き直しても残る', async () => {
+      const user = userEvent.setup()
+      const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+      const { unmount } = render(<App />)
+      await addTodo(user, '今のタスク')
+
+      await importFile(user, backup)
+      expect(confirm).toHaveBeenCalledWith(IMPORT_CONFIRM)
+      await vi.waitFor(() => expectListOrder(['新しいタスク', '古いタスク']))
+      expect(screen.getByRole('checkbox', { name: '古いタスク' })).toBeChecked()
+      expect(screen.getByLabelText('「新しいタスク」の期限日')).toHaveValue('2026-11-30')
+      unmount()
+
+      render(<App />)
+      expectListOrder(['新しいタスク', '古いタスク'])
+    })
+
+    it('確認でキャンセルすると今のタスクのまま', async () => {
+      const user = userEvent.setup()
+      const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
+      render(<App />)
+      await addTodo(user, '今のタスク')
+
+      await importFile(user, backup)
+      await vi.waitFor(() => expect(confirm).toHaveBeenCalled())
+      expectListOrder(['今のタスク'])
+    })
+
+    it('正しくないファイルならエラーを表示して今のタスクに手を付けず、正しいファイルを読み込むとエラーが消える', async () => {
+      const user = userEvent.setup()
+      const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+      render(<App />)
+      await addTodo(user, '今のタスク')
+
+      await importFile(user, { version: 3, todos: [] })
+      expect(await screen.findByRole('alert')).toHaveTextContent('対応していないデータ形式です。')
+      expect(confirm).not.toHaveBeenCalled()
+      expectListOrder(['今のタスク'])
+
+      await importFile(user, backup)
+      await vi.waitFor(() => expectListOrder(['新しいタスク', '古いタスク']))
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     })
   })
 })

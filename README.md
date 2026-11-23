@@ -40,7 +40,7 @@ npm run build      # dist/ に出力
 | --- | --- |
 | `src/App.tsx` | 画面と操作（追加・完了・削除・期限日・並び替え・絞り込み・書き出し・読み込み） |
 | `src/storage.ts` | localStorage への保存と読み込み |
-| `src/backup.ts` | 書き出しファイルの作成・ファイル名・読み込み |
+| `src/backup.ts` | 書き出しファイルの作成・ファイル名・読み込み（読み込むファイルにだけ行う追加の検証を含む） |
 | `src/todoData.ts` | 保存データの形式（バージョン付きJSON）と検証。storage と backup で共通 |
 | `src/todo.ts` | `Todo` 型と、期限日・期限切れ・並び順の判定や並べ替え |
 

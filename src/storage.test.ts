@@ -33,6 +33,12 @@ describe('storage', () => {
     expect(loadTodos()).toEqual([])
   })
 
+  it('読み込むファイルにだけ求める条件（id の重複など）を満たさなくても、保存データは読める', () => {
+    const todos = [sample[0], { ...sample[1], id: 'a', title: '' }]
+    localStorage.setItem('study-ai1.todos', JSON.stringify({ version: 2, todos }))
+    expect(loadTodos()).toEqual(todos)
+  })
+
   it('未対応のバージョンのデータなら空の一覧を返す', () => {
     localStorage.setItem('study-ai1.todos', JSON.stringify({ version: 99, todos: sample }))
     expect(loadTodos()).toEqual([])

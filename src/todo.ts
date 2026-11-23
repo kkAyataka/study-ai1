@@ -13,10 +13,12 @@ export function toDateString(date: Date): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
 }
 
-/** 実在する日付の YYYY-MM-DD 形式かどうか */
+/** 実在する日付（0001〜9999年）の YYYY-MM-DD 形式かどうか */
 export function isDateString(value: unknown): value is string {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
   const [year, month, day] = value.split('-').map(Number)
+  // 0000年は日付入力欄が受け付けない（空欄に見えてしまう）ので、保存できる日付に含めない
+  if (year < 1) return false
   // Date.UTC は 0〜99 年を 1900 年代として扱うので、年は setUTCFullYear で設定する
   const date = new Date(0)
   date.setUTCFullYear(year, month - 1, day)
